@@ -2,7 +2,7 @@
 
 A small JavaScript library that builds query predicates as an expression tree and runs them against in-memory arrays. The tree is also serializable, so the same predicate a browser builds can be shipped across the wire and executed on the server.
 
-It looks like a throwaway file, and the original README sold it as one ("some really old code… uploading for a friend"). It is older than it looks and did more than it lets on. This is the client end of a cross-tier query system, and the design is worth a second look.
+It looks like a throwaway file, and the original README sold it as one ("some really old code… uploading for a friend"). It is the client end of a cross-tier query system that is older and larger than it looks.
 
 ## What it is
 
@@ -18,7 +18,7 @@ It supports the comparisons you would expect — `Equal`, `NotEqual`, `Like` (ca
 
 ## The rest of the story
 
-This was the browser frontend of **Sumo**, a hand-rolled VB.NET LINQ-to-SQL ORM written in 2007. The full pipeline was a distributed query compiler:
+This was the browser frontend of Sumo, a hand-rolled VB.NET LINQ-to-SQL ORM written in 2007. The full pipeline was a distributed query compiler:
 
 ```
 JavaScript expression tree
@@ -36,6 +36,16 @@ JavaScript expression tree
 A predicate composed in the browser crossed the WCF boundary, deserialized into a Sumo expression tree, lowered to LINQ, and translated to SQL — then ran against the database. The serialization seam is still visible in the source: each node carries a `__type` tag like `ExpressionConditional:www.sumosoftware.com/Expressions`, and the properties are emitted alphabetically because that is what .NET's `DataContractSerializer` expects on the other side.
 
 For context on the dates: `IQueryable` and LINQ shipped in .NET 3.5 in late 2007, and OData arrived around 2010. This is the same idea — a query composed as a serializable tree, shipped across a boundary, and translated to SQL — built independently and in parallel, for a product that needed it.
+
+## One predicate, three engines
+
+That pipeline is only one of three. The same predicate runs unchanged in three places:
+
+```
+browser arrays   ·   compiled parallel in-memory C#   ·   SQL (SQL Server / Oracle / MySQL)
+```
+
+A query built in the browser ships as data, then is answered from a database, from server memory, or filtered again in the browser — with a hot cache keeping the client delta-synced to the server. The [wiki](https://github.com/marklauter/jsexpressions/wiki/Cross-Tier-Query) covers the full design, with diagrams.
 
 ## Usage
 
