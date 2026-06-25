@@ -1,1 +1,71 @@
-Some really old code that uses an expression tree to run queries against javascript arrays. Uploading for a friend.
+# jsexpressions
+
+A small JavaScript library that builds query predicates as an expression tree and runs them against in-memory arrays. The tree is also serializable, so the same predicate a browser builds can be shipped across the wire and executed on the server.
+
+It looks like a throwaway file, and the original README sold it as one ("some really old code… uploading for a friend"). It is older than it looks and did more than it lets on. This is the client end of a cross-tier query system, and the design is worth a second look.
+
+## What it is
+
+`predicatebuilder.js` is a predicate builder over a composite expression tree, in the interpreter pattern:
+
+- `ExpressionConditional` is a leaf — a single comparison like `name == 'gandalf'` or `level >= 20`. It binds one comparison function at construction and applies it in `Evaluate(item)`.
+- `ExpressionBinary` is an internal node — two sub-expressions joined by `And` or `Or`, with short-circuit evaluation (it skips the right side when the left already decides the result).
+- `PredicateBuilder` assembles the tree. You add conditionals and it grows the root, combining nodes with logical operators.
+
+Evaluating the root against an item walks the tree and returns true or false, so you filter an array by running the predicate over each element.
+
+It supports the comparisons you would expect — `Equal`, `NotEqual`, `Like` (case-insensitive substring), the four inequalities, `Is`/`IsNot` (strict identity), `In`/`NotIn`, and `Contains` — combined with `And` and `Or`. Large `In` lists are split into `Or` groups of a thousand, a workaround for the SQL `IN`-clause limit on the server side.
+
+## The rest of the story
+
+This was the browser frontend of **Sumo**, a hand-rolled VB.NET LINQ-to-SQL ORM written in 2007. The full pipeline was a distributed query compiler:
+
+```
+JavaScript expression tree
+        │  serialize over WCF
+        ▼
+   Sumo expression tree   (VB.NET)
+        │  lower
+        ▼
+   LINQ expression tree
+        │  translate
+        ▼
+        SQL
+```
+
+A predicate composed in the browser crossed the WCF boundary, deserialized into a Sumo expression tree, lowered to LINQ, and translated to SQL — then ran against the database. The serialization seam is still visible in the source: each node carries a `__type` tag like `ExpressionConditional:www.sumosoftware.com/Expressions`, and the properties are emitted alphabetically because that is what .NET's `DataContractSerializer` expects on the other side.
+
+For context on the dates: `IQueryable` and LINQ shipped in .NET 3.5 in late 2007, and OData arrived around 2010. This is the same idea — a query composed as a serializable tree, shipped across a boundary, and translated to SQL — built independently and in parallel, for a product that needed it.
+
+## Usage
+
+The library expects a global `isNullOrUndefined(x)` helper, provided by the host page.
+
+```javascript
+var wizards = [
+    { name: 'gandalf',  level: 50 },
+    { name: 'radagast', level: 12 },
+    { name: 'saruman',  level: 40 }
+];
+
+// name LIKE 'gan'  AND  level >= 20
+var builder = new PredicateBuilder();
+builder.AddConditional(
+    new ExpressionConditional('name', 'gan', false, relationalOperators.Like()));
+builder.AddConditional(
+    new ExpressionConditional('level', 20, false, relationalOperators.GreaterThanOrEqual()),
+    logicalOperators.And());
+
+var matches = wizards.filter(function (w) {
+    return builder.RootExpression.Evaluate(w);
+});
+// matches === [ { name: 'gandalf', level: 50 } ]
+```
+
+The same `builder.RootExpression`, serialized, is what crossed the wire to Sumo.
+
+## Status
+
+Archival. It is one ES5 file, with no build step, no module exports, and a dependency on the host's `isNullOrUndefined`. The server it spoke to — `sumosoftware.com` — is gone, so the wire half no longer has anything to answer it. What remains is a tidy example of an expression-tree predicate builder, and the surviving frontend of a cross-tier query compiler from 2007.
+
+MIT licensed.
