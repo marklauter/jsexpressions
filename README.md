@@ -18,7 +18,7 @@ It supports the comparisons you would expect — `Equal`, `NotEqual`, `Like` (ca
 
 ## The rest of the story
 
-This was the browser frontend of Sumo, a hand-rolled VB.NET LINQ-to-SQL ORM written in 2007. The full pipeline was a distributed query compiler:
+This was the browser frontend of Sumo, a hand-rolled VB.NET LINQ-to-SQL ORM written in 2007. This JavaScript client came a few years later, in the 2009–10 era. The full pipeline was a distributed query compiler:
 
 ```
 JavaScript expression tree
@@ -76,6 +76,6 @@ The same `builder.RootExpression`, serialized, is what crossed the wire to Sumo.
 
 ## Status
 
-Archival. It is one ES5 file, with no build step, no module exports, and a dependency on the host's `isNullOrUndefined`. The server it spoke to — `sumosoftware.com` — is gone, so the wire half no longer has anything to answer it. What remains is a tidy example of an expression-tree predicate builder, and the surviving frontend of a cross-tier query compiler from 2007.
+Archival. It is one ES5 file, with no build step, no module exports, and a dependency on the host's `isNullOrUndefined`. The server it spoke to — `sumosoftware.com` — is gone, so the wire half no longer has anything to answer it. What remains is a tidy example of an expression-tree predicate builder, and the surviving frontend — written around 2009–10 — of a cross-tier query compiler that began in 2007.
 
 MIT licensed.
