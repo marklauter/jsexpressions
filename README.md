@@ -37,6 +37,16 @@ A predicate composed in the browser crossed the WCF boundary, deserialized into 
 
 For context on the dates: `IQueryable` and LINQ shipped in .NET 3.5 in late 2007, and OData arrived around 2010. This is the same idea — a query composed as a serializable tree, shipped across a boundary, and translated to SQL — built independently and in parallel, for a product that needed it.
 
+## One predicate, three engines
+
+That pipeline is only one of three. The same predicate runs unchanged in three places:
+
+```
+browser arrays   ·   compiled parallel in-memory C#   ·   SQL (SQL Server / Oracle / MySQL)
+```
+
+A query built in the browser ships as data, then is answered from a database, from server memory, or filtered again in the browser — with a hot cache keeping the client delta-synced to the server. The [wiki](https://github.com/marklauter/jsexpressions/wiki/Cross-Tier-Query) tells the whole story, diagrams and all.
+
 ## Usage
 
 The library expects a global `isNullOrUndefined(x)` helper, provided by the host page.
