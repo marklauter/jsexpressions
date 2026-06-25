@@ -6,7 +6,7 @@ It looks like a throwaway file, and the original README sold it as one ("some re
 
 ## What it is
 
-`predicatebuilder.js` is a predicate builder over a composite expression tree, in the interpreter pattern:
+A small client-side query system in a handful of vanilla-JavaScript files. The core, `predicatebuilder.js`, is a predicate builder over a composite expression tree, in the interpreter pattern:
 
 - `ExpressionConditional` is a leaf — a single comparison like `name == 'gandalf'` or `level >= 20`. It binds one comparison function at construction and applies it in `Evaluate(item)`.
 - `ExpressionBinary` is an internal node — two sub-expressions joined by `And` or `Or`, with short-circuit evaluation (it skips the right side when the left already decides the result).
@@ -15,6 +15,14 @@ It looks like a throwaway file, and the original README sold it as one ("some re
 Evaluating the root against an item walks the tree and returns true or false, so you filter an array by running the predicate over each element.
 
 It supports the comparisons you would expect — `Equal`, `NotEqual`, `Like` (case-insensitive substring), the four inequalities, `Is`/`IsNot` (strict identity), `In`/`NotIn`, and `Contains` — combined with `And` and `Or`. Large `In` lists are split into `Or` groups of a thousand, a workaround for the SQL `IN`-clause limit on the server side.
+
+The other files build on that predicate:
+
+- `query.js` — `query(hash, expression)` and `grep(array, expression)` run a built predicate over a collection.
+- `sort.js` — `SortExpression` and `SortColumn` order a result set.
+- `eventemitter.js` — a small `bind`/`trigger` base class.
+- `cache.js` — a client-side data cache of expirable and self-updating items, built on `EventEmitter`.
+- `read.js` — the `read` path that ships a predicate to the server.
 
 ## The rest of the story
 
@@ -76,6 +84,6 @@ The same `builder.RootExpression`, serialized, is what crossed the wire to Sumo.
 
 ## Status
 
-Archival. It is one ES5 file, with no build step, no module exports, and a dependency on the host's `isNullOrUndefined`. The server it spoke to — `sumosoftware.com` — is gone, so the wire half no longer has anything to answer it. What remains is a tidy example of an expression-tree predicate builder, and the surviving frontend — written around 2009–10 — of a cross-tier query compiler that began in 2007.
+Archival. A handful of vanilla ES5 files, with no build step, no module exports, a dependency on the host's `isNullOrUndefined`, and a host-provided `callAjax` transport for the `read` path. The server it spoke to — `sumosoftware.com` — is gone, so the wire half no longer has anything to answer it. What remains is a tidy example of an expression-tree query system, and the surviving frontend — written around 2009–10 — of a cross-tier query compiler that began in 2007.
 
 MIT licensed.
