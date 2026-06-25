@@ -7,22 +7,18 @@ function ExpirableCacheItem(data, name, expirationTimespan, isFloatingExpiration
     this.ExpirationTimeSpan = expirationTimespan;
     this.IsFloatingExpiration = isFloatingExpiration;
     this.OnExpire = onExpire;
-
-    this.Locked = false;
     this.ExpirationTimeoutId = null;
 
-    this.Expire = function () {
+    this.expire = function () {
         if (this.OnExpire !== null) {
             this.OnExpire(this);
         }
     };
 }
 
-// a cached collection that refreshes itself on an interval by calling a caller-supplied fetch function.
-// fetch has the shape: fetch(version, onSuccess, onFailure, params)
-//   onSuccess(params, data), onFailure(params, request, status, error)
+// a cached collection that refreshes itself on an interval by calling read().
 // options: { cache, updatedCallback, failureCallback, transform, expression, params, hashIndexColumns }
-function UpdatableCacheItem(name, updateIntervalInSeconds, fetch, options) {
+function UpdatableCacheItem(name, typeName, updateIntervalInSeconds, options) {
     "use strict";
 
     options = options || {};
@@ -38,6 +34,7 @@ function UpdatableCacheItem(name, updateIntervalInSeconds, fetch, options) {
         statistics = [];
 
     this.Name = name;
+    this.TypeName = typeName;
     this.Expression = options.expression || null;
     this.Params = options.params || null;
     this.UpdateIntervalInSeconds = updateIntervalInSeconds;
@@ -199,10 +196,10 @@ function UpdatableCacheItem(name, updateIntervalInSeconds, fetch, options) {
 
     function fetchData() {
         var lStart = new Date();
-        fetch(self.Version, updateSuccessCallback, updateFailureCallback, { 'startTime': lStart });
+        read(self.TypeName, self.Expression, self.Version, updateSuccessCallback, updateFailureCallback, { 'startTime': lStart }, null, 0);
     }
 
-    this.Update = function () {
+    this.update = function () {
         if (acquireLock('update')) {
             fetchData();
         }
@@ -213,46 +210,30 @@ function UpdatableCacheItem(name, updateIntervalInSeconds, fetch, options) {
     };
 }
 
-// a client-side data cache holding expirable and self-updating items, with a small event system.
-// subscribe with cache.on('<itemName>updated', handler); events fired: added, complete, updated
+// a client-side data cache holding expirable and self-updating items.
+// inherits the bind/trigger event system from EventEmitter; events fired: added, complete, updated
 function Cache() {
     "use strict";
 
+    EventEmitter.call(this);
+
     var self = this,
         expirableItems = {},
-        updatableItems = {},
-        handlers = {};
-
-    this.on = function (event, handler) {
-        if (isNullOrUndefined(handlers[event])) {
-            handlers[event] = [];
-        }
-        handlers[event].push(handler);
-    };
-
-    this.trigger = function (event, data) {
-        var lList = handlers[event],
-            i;
-        if (!isNullOrUndefined(lList)) {
-            for (i = 0; i < lList.length; i++) {
-                lList[i](data);
-            }
-        }
-    };
+        updatableItems = {};
 
     function initializeUpdateTimer(cacheItem) {
-        cacheItem.UpdateIntervalId = window.setInterval(function () { cacheItem.Update(); }, cacheItem.UpdateIntervalInSeconds * 1000);
+        cacheItem.UpdateIntervalId = window.setInterval(function () { cacheItem.update(); }, cacheItem.UpdateIntervalInSeconds * 1000);
     }
 
     function initializeExpirationTimer(cacheItem) {
-        cacheItem.ExpirationTimeoutId = window.setTimeout(function () { self.ExpireItem(cacheItem.Name); }, cacheItem.ExpirationTimeSpan * 1000);
+        cacheItem.ExpirationTimeoutId = window.setTimeout(function () { self.expireItem(cacheItem.Name); }, cacheItem.ExpirationTimeSpan * 1000);
     }
 
     function onItemUpdate(item) {
         self.trigger(item.Name + 'updated', item);
     }
 
-    this.GetItem = function (name) {
+    this.getItem = function (name) {
         var lResult = expirableItems[name];
         if (isNullOrUndefined(lResult)) {
             lResult = updatableItems[name];
@@ -260,35 +241,35 @@ function Cache() {
         return lResult;
     };
 
-    this.RemoveItem = function (name) {
-        var lResult = this.RemoveExpirableItem(name);
+    this.removeItem = function (name) {
+        var lResult = this.removeExpirableItem(name);
         if (isNullOrUndefined(lResult)) {
-            lResult = this.RemoveUpdatableItem(name);
+            lResult = this.removeUpdatableItem(name);
         }
         return lResult;
     };
 
-    this.AddUpdatableItem = function (name, updateIntervalInSeconds, fetch, options) {
+    this.addUpdatableItem = function (name, typeName, updateIntervalInSeconds, options) {
         options = options || {};
         options.cache = this;
         options.updatedCallback = onItemUpdate;
 
-        var lCacheItem = new UpdatableCacheItem(name, updateIntervalInSeconds, fetch, options);
+        var lCacheItem = new UpdatableCacheItem(name, typeName, updateIntervalInSeconds, options);
         updatableItems[name] = lCacheItem;
         this.trigger(name + 'added', lCacheItem);
 
         // fetch now, then stagger the refresh loop so many items don't fire at once
-        lCacheItem.Update();
+        lCacheItem.update();
         window.setTimeout(function () { initializeUpdateTimer(lCacheItem); }, Math.floor((Math.random() * 60) + 1) * 1000);
 
         return lCacheItem;
     };
 
-    this.GetUpdatableItem = function (name) {
+    this.getUpdatableItem = function (name) {
         return updatableItems[name];
     };
 
-    this.RemoveUpdatableItem = function (name) {
+    this.removeUpdatableItem = function (name) {
         var lResult = updatableItems[name];
         if (!isNullOrUndefined(lResult)) {
             window.clearInterval(lResult.UpdateIntervalId);
@@ -297,7 +278,7 @@ function Cache() {
         return lResult;
     };
 
-    this.AddExpirableItem = function (data, name, expirationTimespan, isFloatingExpiration, onExpire) {
+    this.addExpirableItem = function (data, name, expirationTimespan, isFloatingExpiration, onExpire) {
         var lIsFloatingExpiration = (expirationTimespan !== 0 && isFloatingExpiration),
             lCacheItem = new ExpirableCacheItem(data, name, expirationTimespan, lIsFloatingExpiration, onExpire);
 
@@ -309,7 +290,7 @@ function Cache() {
         return lCacheItem;
     };
 
-    this.GetExpirableItem = function (name) {
+    this.getExpirableItem = function (name) {
         var lResult = expirableItems[name];
         if (!isNullOrUndefined(lResult) && lResult.IsFloatingExpiration) {
             window.clearTimeout(lResult.ExpirationTimeoutId);
@@ -318,7 +299,7 @@ function Cache() {
         return lResult;
     };
 
-    this.RemoveExpirableItem = function (name) {
+    this.removeExpirableItem = function (name) {
         var lResult = expirableItems[name];
         if (!isNullOrUndefined(lResult)) {
             window.clearTimeout(lResult.ExpirationTimeoutId);
@@ -327,19 +308,18 @@ function Cache() {
         return lResult;
     };
 
-    this.ExpireItem = function (name) {
-        var lCacheItem = this.RemoveExpirableItem(name);
+    this.expireItem = function (name) {
+        var lCacheItem = this.removeExpirableItem(name);
         if (!isNullOrUndefined(lCacheItem)) {
-            lCacheItem.Expire();
+            lCacheItem.expire();
             lCacheItem.Data = null;
-            lCacheItem = null;
         }
     };
 
-    this.UpdateItem = function (name) {
+    this.updateItem = function (name) {
         var lCacheItem = updatableItems[name];
         if (!isNullOrUndefined(lCacheItem)) {
-            lCacheItem.Update();
+            lCacheItem.update();
         }
     };
 
@@ -347,3 +327,6 @@ function Cache() {
         return updatableItems;
     };
 }
+
+Cache.prototype = new EventEmitter();
+Cache.prototype.constructor = Cache;
